@@ -1,9 +1,22 @@
+# region 载入库,加载数据,参数配置
 import numpy as np
 #需要使用sklearn.preprocessing其中的StandardScaler()来进行数据标准化
 import sklearn.preprocessing as prep 
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
+mnist = input_data.read_data_sets('MNIST_data', one_hot = True)
+#训练20轮
+training_epochs = 20
+#每轮训练中，batch大小为128
+batch_size = 128
+#每轮训练中，batch_num即batch的总个数,429个。
+batch_num = int(mnist.train.num_examples / batch_size)
+#每隔display_step轮，显示一次cost
+display_step = 0
+# endregion
+
+# region 构造计算图
 #实现一个标准均匀分布的Xaiver初始化器,功能是让权重被初始化到一个合适的范围，即均值为0，方差为2/(n_in+n_out)。
 #fan_in表示输入节点的个数，fan_out表示输出节点的个数。
 def xavier_init(fan_in, fan_out, constant = 1):
@@ -90,7 +103,15 @@ class AdditiveGaussianNoiseAutoencoder(object):
     def getBiases2(self):
         return self.sess.run(self.weights['b2'])
 
-#对数据进行标准化，即让数据变成均值为0，标准差为1的分布。
+autoencoder = AdditiveGaussianNoiseAutoencoder(n_input = 784,
+                                               n_hidden = 200,
+                                               transfer_function = tf.nn.softplus,
+                                               optimizer = tf.train.AdamOptimizer(learning_rate = 0.001),
+                                               scale = 0.01)
+# endregion
+
+# region 执行计算图
+#对数据进行标准化，即让数据变成均值为0，标准差为1的分布。数据标准化主要功能就是消除变量间的量纲关系，从而使数据具有可比性。
 def standard_scale(X_train, X_test):
     #在训练集上fit
     preprocessor = prep.StandardScaler().fit(X_train)
@@ -98,31 +119,15 @@ def standard_scale(X_train, X_test):
     X_train = preprocessor.transform(X_train)
     X_test = preprocessor.transform(X_test)
     return X_train, X_test
+#mnist.train.images.shape=[55000,784],mnist.test.images.shape=[10000,784]
+#标准化后，shape不变。即X_train.shape=[55000,784],X_test.shape=[10000,784]
+X_train, X_test = standard_scale(mnist.train.images, mnist.test.images)
 
 def get_random_block_from_data(data, batch_size):
     #取一个在(0, len(data) - batch_size)范围内的随机整数。
     start_index = np.random.randint(0, len(data) - batch_size)
     #返回一个data,start_index ???????????????属于不放回抽样。
     return data[start_index:(start_index + batch_size)]
-
-mnist = input_data.read_data_sets('MNIST_data', one_hot = True)
-#mnist.train.images.shape=[55000,784],mnist.test.images.shape=[10000,784]
-#标准化后，shape不变。即X_train.shape=[55000,784],X_test.shape=[10000,784]
-X_train, X_test = standard_scale(mnist.train.images, mnist.test.images)
-#训练20轮
-training_epochs = 20
-#每轮训练中，batch大小为128
-batch_size = 128
-#每轮训练中，batch_num即batch的总个数,429个。
-batch_num = int(mnist.train.num_examples / batch_size)
-#每隔display_step轮，显示一次cost
-display_step = 0
-#构建一个编码器网络，不运行，仅初始化sess，并初始化变量。
-autoencoder = AdditiveGaussianNoiseAutoencoder(n_input = 784,
-                                               n_hidden = 200,
-                                               transfer_function = tf.nn.softplus,
-                                               optimizer = tf.train.AdamOptimizer(learning_rate = 0.001),
-                                               scale = 0.01)
 #把所有的epoch都循环一遍。
 for epoch in range(training_epochs):
     total_cost = 0.
@@ -138,6 +143,8 @@ for epoch in range(training_epochs):
         print("Epoch:", '%03d' % (epoch + 1), "  Total cost in train :", "{:.9f}".format(total_cost))
 print('-------------------------------')
 print("Finally,Total cost in test:" + str(autoencoder.calc_total_cost(X_test)))
+
+# endregion
 
 '''
 print('-------------------------------')
